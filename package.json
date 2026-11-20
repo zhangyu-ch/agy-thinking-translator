@@ -1,0 +1,29 @@
+{
+  "name": "agy-thinking-translator",
+  "version": "1.0.0",
+  "description": "Auto-expand active English thinking chains and display persistent streaming Chinese translations powered by local Magpie DS-Flash in Antigravity 2.0.",
+  "type": "module",
+  "license": "MIT",
+  "author": "zhangyu-ch",
+  "homepage": "https://github.com/zhangyu-ch/agy-thinking-translator#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhangyu-ch/agy-thinking-translator.git"
+  },
+  "keywords": [
+    "antigravity",
+    "agy-plugin",
+    "thinking",
+    "chain-of-thought",
+    "translator",
+    "magpie"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "test": "node --test test/plugin.test.mjs",
+    "install-plugin": "node scripts/install.mjs",
+    "uninstall-plugin": "node scripts/uninstall.mjs"
+  }
+}

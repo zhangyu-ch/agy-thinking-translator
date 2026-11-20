@@ -1,0 +1,21 @@
+{
+  "name": "agy-thinking-translator",
+  "displayName": "Thinking Translator",
+  "version": "1.0.0",
+  "description": "在执行过程中自动展开思维链，并通过本地 Magpie DS-Flash 模型在思维链正下方实时插入且常驻展开中文译文。",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "zhangyu-ch",
+    "url": "https://github.com/zhangyu-ch"
+  },
+  "homepage": "https://github.com/zhangyu-ch/agy-thinking-translator#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhangyu-ch/agy-thinking-translator.git"
+  },
+  "suggestedPrompts": [
+    "分析当前项目的模块结构并说明推理过程",
+    "排查潜在性能瓶颈并给出分步优化方案",
+    "对比两种架构设计方案的优缺点"
+  ]
+}

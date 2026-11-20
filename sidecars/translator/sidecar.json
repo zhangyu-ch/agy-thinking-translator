@@ -1,0 +1,26 @@
+{
+  "command": "node",
+  "args": [
+    "main.mjs"
+  ],
+  "env": {
+    "AGY_THINKING_TRANSLATOR_VERSION": "1.0.0"
+  },
+  "restart_policy": "always",
+  "display_name": "思维链翻译",
+  "description": "执行过程中自动保持原英文思维链展开，并通过本机 Magpie DS-Flash 模型在下方实时插入且常驻展开中文译文。",
+  "has_web_ui": true,
+  "agent_permissions": {
+    "allows_user_interactions": false
+  },
+  "ui_config": {
+    "display_name": "思维链翻译",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "思维链翻译"
+      }
+    ]
+  }
+}
