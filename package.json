@@ -1,6 +1,6 @@
 {
   "name": "agy-thinking-translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Auto-expand active English thinking chains and display persistent streaming Chinese translations powered by local Magpie DS-Flash in Antigravity 2.0.",
   "type": "module",
   "license": "MIT",

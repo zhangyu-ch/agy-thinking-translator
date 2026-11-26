@@ -96,6 +96,14 @@ sh ./uninstall.sh
 node --test test/plugin.test.mjs
 ```
 
+## 更新日志
+
+### v1.0.1
+- **增强与 `Agy Powertools` 的冷启动与热更新共存稳定性**：自动检测并存的 `agy-powertools` 配置，在冷启动期间主动礼让原生 `segment` 函数签名校验，并在 `agy-powertools` 运行时热更新或重挂时自动还原底层原生函数后依序重挂，彻底消除双插件启动先后竞态导致的 `segment (missing)` 报错。
+
+### v1.0.0
+- 首个正式版本发布：支持执行过程中自动展开英文思维链、完成后自动折叠英文并常驻展开流式中文译文、本地 Magpie `group/ds-flash` 并行翻译与 SHA-256 磁盘缓存。
+
 ## 开源协议
 
 基于 [MIT License](LICENSE) 开源。

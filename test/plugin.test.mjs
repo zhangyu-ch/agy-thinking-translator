@@ -20,7 +20,12 @@ import {
 } from '../lib/settings.mjs';
 import { createTranslationCache } from '../lib/cache.mjs';
 import { createTranslatorService } from '../lib/translator.mjs';
-import { isAntigravityHubTarget, parseNativeHookNamesFromSource } from '../lib/cdp-host.mjs';
+import {
+  buildInjectedScript,
+  isAntigravityHubTarget,
+  isPowertoolsEnabled,
+  parseNativeHookNamesFromSource
+} from '../lib/cdp-host.mjs';
 import { installPluginPackage, uninstallPluginPackage } from '../lib/installer.mjs';
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -261,5 +266,180 @@ test('installer copies verified files without touching config.json and uninstall
     assert.equal(existsSync(installRes.destination), false);
   } finally {
     rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('isPowertoolsEnabled and client-injected yield/self-heal segment hook for agy-powertools coexistence', async () => {
+  const tempHome = mkdtempSync(join(tmpdir(), 'agy-tt-coexist-'));
+  try {
+    assert.equal(isPowertoolsEnabled({ home: tempHome }), false);
+    mkdirSync(join(tempHome, '.gemini', 'config'), { recursive: true });
+    writeFileSync(
+      join(tempHome, '.gemini', 'config', 'config.json'),
+      JSON.stringify({ plugins: { 'agy-powertools': { enabled: true } } })
+    );
+    assert.equal(isPowertoolsEnabled({ home: tempHome }), true);
+    writeFileSync(
+      join(tempHome, '.gemini', 'config', 'config.json'),
+      JSON.stringify({ plugins: { 'agy-powertools': { enabled: false } } })
+    );
+    assert.equal(isPowertoolsEnabled({ home: tempHome }), false);
+  } finally {
+    rmSync(tempHome, { recursive: true, force: true });
+  }
+
+  function createDomSandbox(origin) {
+    const headChildren = [];
+    const styleNode = {
+      id: '',
+      textContent: '',
+      isConnected: false,
+      remove() {
+        this.isConnected = false;
+      }
+    };
+    const document = {
+      head: {
+        appendChild(el) {
+          el.isConnected = true;
+          headChildren.push(el);
+          return el;
+        }
+      },
+      body: {},
+      documentElement: {},
+      createElement() {
+        return { ...styleNode, dataset: {}, classList: { add() {}, remove() {} }, style: {} };
+      },
+      getElementById() {
+        return null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+      addEventListener() {}
+    };
+    class MockMutationObserver {
+      observe() {}
+      disconnect() {}
+    }
+    const sandbox = {
+      location: { origin },
+      document,
+      MutationObserver: MockMutationObserver,
+      AbortController,
+      TextEncoder,
+      Uint32Array,
+      Uint8Array,
+      DataView,
+      Math,
+      Date,
+      Function,
+      Object,
+      Map,
+      Set,
+      WeakSet,
+      Promise,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+      requestAnimationFrame: fn => setTimeout(fn, 0)
+    };
+    sandbox.window = sandbox;
+    sandbox.top = sandbox;
+    sandbox.globalThis = sandbox;
+    return sandbox;
+  }
+
+  const origin = 'https://127.0.0.1:54321';
+  const defaultSettings = {
+    enabled: true,
+    expandEnglishWhileThinking: true,
+    collapseEnglishWhenDone: true,
+    keepChineseExpanded: true,
+    keepContainersExpanded: true,
+    forceVerboseSteps: true,
+    translatorModel: 'group/ds-flash',
+    translatorThinking: 'low',
+    excludedModels: []
+  };
+
+  // 1. Cold-start courtesy + hot-reload self-healing when agy-powertools is enabled
+  const sandbox = createDomSandbox(origin);
+  sandbox.mVc = vm.runInContext(
+    '(function mVc(a){var {getStepRendererConfig:g,hasBeenCollapsed:k}=a;return {leadingSteps:[],body:{type:"inline"},seenVerbose:Boolean(a?.verboseAgentChat)};})',
+    vm.createContext({})
+  );
+  const originalNativeMvc = sandbox.mVc;
+  sandbox.E3a = props => props;
+
+  const script = buildInjectedScript({
+    origin,
+    settings: defaultSettings,
+    nativeHooks: { segmentName: 'mVc', providerName: 'E3a' },
+    coexistWithPowertools: true,
+    powertoolsYieldMaxMs: 2000
+  });
+  vm.runInNewContext(script, sandbox);
+
+  try {
+    // Immediately after injection (before Powertools boots), mVc MUST remain unwrapped so Powertools can inspect Function.prototype.toString
+    assert.equal(sandbox.mVc, originalNativeMvc);
+    assert.equal(Boolean(sandbox.mVc.__agyTTWrapped), false);
+    assert.equal(Boolean(sandbox.E3a.__agyTTWrapped), true, 'Provider can wrap immediately');
+
+    // Simulate Powertools resolving native mVc, wrapping it with stageSegmentRender, and mounting
+    const powertoolsStageWrapper = function (...args) {
+      const res = originalNativeMvc(...args);
+      return { ...res, fromPowertools: true };
+    };
+    sandbox.mVc = powertoolsStageWrapper;
+    sandbox.__agyPowertools = { status: { healthy: true, mounted: 1 } };
+
+    await new Promise(r => setTimeout(r, 320));
+    assert.equal(Boolean(sandbox.mVc.__agyTTWrapped), true, 'Should wrap on top once Powertools is healthy');
+    const combinedOut = sandbox.mVc({ getStepRendererConfig: () => ({}), hasBeenCollapsed: false, segment: { steps: [] } });
+    assert.equal(combinedOut.fromPowertools, true);
+    assert.equal(combinedOut.seenVerbose, true);
+
+    // Simulate Powertools hot-reload: Powertools disposes (deleting __agyPowertools) while mVc is wrapped by TT
+    delete sandbox.__agyPowertools;
+    sandbox.__agyCompatibilityError = 'Antigravity compatibility: segment (missing)';
+    sandbox.__agyThinkingTranslator.sync();
+
+    assert.equal(sandbox.mVc, originalNativeMvc, 'Must self-heal back to root native mVc on Powertools hot-reload');
+    assert.equal(sandbox.__agyCompatibilityError, undefined, 'Must clear stale compatibility error');
+
+    // Powertools remounts cleanly on restored native mVc, and TT re-wraps on top
+    const powertoolsStageWrapperV2 = function (...args) {
+      return { ...originalNativeMvc(...args), fromPowertoolsV2: true };
+    };
+    sandbox.mVc = powertoolsStageWrapperV2;
+    sandbox.__agyPowertools = { status: { healthy: true, mounted: 1 } };
+    await new Promise(r => setTimeout(r, 320));
+    assert.equal(Boolean(sandbox.mVc.__agyTTWrapped), true);
+    assert.equal(sandbox.mVc({ getStepRendererConfig: () => ({}), hasBeenCollapsed: false, segment: { steps: [] } }).fromPowertoolsV2, true);
+  } finally {
+    sandbox.__agyThinkingTranslator?.dispose?.();
+  }
+
+  // 2. Bounded grace timeout fallback if Powertools is enabled in config.json but never mounts
+  const fallbackSandbox = createDomSandbox(origin);
+  fallbackSandbox.mVc = originalNativeMvc;
+  const shortScript = buildInjectedScript({
+    origin,
+    settings: defaultSettings,
+    nativeHooks: { segmentName: 'mVc', providerName: null },
+    coexistWithPowertools: true,
+    powertoolsYieldMaxMs: 120
+  });
+  vm.runInNewContext(shortScript, fallbackSandbox);
+  try {
+    assert.equal(Boolean(fallbackSandbox.mVc.__agyTTWrapped), false);
+    await new Promise(r => setTimeout(r, 380));
+    assert.equal(Boolean(fallbackSandbox.mVc.__agyTTWrapped), true, 'Must wrap after grace window expires');
+  } finally {
+    fallbackSandbox.__agyThinkingTranslator?.dispose?.();
   }
 });

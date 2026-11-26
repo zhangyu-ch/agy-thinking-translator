@@ -1,7 +1,7 @@
 {
   "name": "agy-thinking-translator",
   "displayName": "Thinking Translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "在执行过程中自动展开思维链，并通过本地 Magpie DS-Flash 模型在思维链正下方实时插入且常驻展开中文译文。",
   "logo": "assets/logo.svg",
   "author": {

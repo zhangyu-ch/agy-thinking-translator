@@ -4,7 +4,7 @@
     "main.mjs"
   ],
   "env": {
-    "AGY_THINKING_TRANSLATOR_VERSION": "1.0.0"
+    "AGY_THINKING_TRANSLATOR_VERSION": "1.0.1"
   },
   "restart_policy": "always",
   "display_name": "思维链翻译",
